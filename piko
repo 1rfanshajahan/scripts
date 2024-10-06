@@ -1,0 +1,135 @@
+#!/bin/sh
+
+setup_terminal() {
+    # Setup the terminal for the TUI.
+    # '\e[?1049h': Use alternative screen buffer.
+    # '\e[?7l':    Disable line wrapping.
+    # '\e[?25l':   Hide the cursor.
+    # '\e[2J':     Clear the screen.
+    # '\e[1;Nr':   Limit scrolling to scrolling area.
+    #              Also sets cursor to (0,0).
+    printf '\e[?1049h\e[?7l\e[?25l\e[2J\e[1;%sr' "$max_items"
+
+    # Hide echoing of user input
+    stty -echo
+}
+
+reset_terminal() {
+    # Reset the terminal to a useable state (undo all changes).
+    # '\e[?7h':   Re-enable line wrapping.
+    # '\e[?25h':  Unhide the cursor.
+    # '\e[2J':    Clear the terminal.
+    # '\e[;r':    Set the scroll region to its default value.
+    #             Also sets cursor to (0,0).
+    # '\e[?1049l: Restore main screen buffer.
+    printf '\e[?7h\e[?25h\e[2J\e[;r\e[?1049l'
+
+    # Show user input.
+    stty echo
+
+    # still won't quit come on MAN COME ON UUUUUUUUUGGGGGGGGGGGGG
+    pkill -f piko
+}
+
+clear_screen() {
+    # Only clear the scrolling window (dir item list).
+    # '\e[%sH':    Move cursor to bottom of scroll area.
+    # '\e[9999C':  Move cursor to right edge of the terminal.
+    # '\e[1J':     Clear screen to top left corner (from cursor up).
+    # '\e[2J':     Clear screen fully (if using tmux) (fixes clear issues).
+    # '\e[1;%sr':  Clearing the screen resets the scroll region(?). Re-set it.
+    #              Also sets cursor to (0,0).
+    printf '\e[%sH\e[9999C\e[1J%b\e[1;%sr' \
+           "$((LINES-2))" "${TMUX:+\e[2J}" "$max_items"
+}
+
+get_term_size() {
+    # Get terminal size ('stty' is POSIX and always available).
+    # This can't be done reliably across all bash versions in pure bash.
+    read -r LINES COLUMNS < <(stty size)
+
+    # Max list items that fit in the scroll area.
+    ((max_items=LINES-2))
+}
+
+landscape() {
+    # \e[1;33m    term yellow
+    # \e[2H       move bottom
+    printf '\e[1;33m\e[2H
+
+         .{{}}}}}}.
+       {{{{{}}}}}}}.
+      {{{{  }}}}}}}}}
+     }}}}} _   _ {{{{{
+     }}}}  6   6  {{{{
+    {{{{{    ^    }}}}}
+   {{{{{{\  -=-  /}}}}}}
+   {{{{{{{;.___.;}}}}}}}
+    {{{{{{{)   (}}}}}}}   ~jgs
+'
+}
+
+makeup() {
+    while IFS='=' read -r xx yy; do
+            case $xx in
+                title) title=$yy ;;
+                artist) artist=$yy ;;
+            esac
+         done < /tmp/oo.txt
+
+    # "" ""     don't ask for my number
+    # (old)     printf '\e[1H\e[0;0m%*s\r%s \e[3H\e[K' "" "" \
+
+    printf '\e[1H\e[0;0m%*s\r%s \e[2H\e[' "" "" \
+           "$title - $artist"
+}
+
+haircomb() {
+    # \e[1;r    0;0
+    # \e[%sH    999:999
+    # \e[2J     clear line
+    printf '%*s\r%s \e[2H\e[2J'
+
+    # more room
+    # printf '\e[1H\e[0;0m%*s\r%s \e[0H\e[2K'
+
+    ffmpeg -y -i \
+    "$@" -f ffmetadata /tmp/oo.txt \
+    -- /tmp/oo.jpg \
+    -loglevel quiet
+
+    mpv --no-audio-display \
+    --input-ipc-server=/tmp/socketmpv \
+    --msg-level=all=no,statusline=debug "$@"
+
+    # break loop for those who don't use a file manager
+    trap "exit" SIGINT
+    trap "exit" SIGQUIT
+
+    # pick a random file in current dir
+    shuffle=$(find "$PWD" -type f -iname '*.mp3' | shuf -n 1)
+}
+
+replay() {
+    # allow mpv cli instance to
+    # interact with resize events
+    haircomb "$@"
+    while true; do haircomb "$shuffle"; done
+}
+
+main() {
+    trap 'reset_terminal' EXIT
+    trap 'get_term_size; clear_screen; landscape; haircomb' WINCH
+
+    get_term_size
+    setup_terminal
+    landscape
+
+    replay "$@" &
+
+    for ((;;)); {
+        sleep 0.4s; landscape; makeup
+    }
+}
+
+main "$@"

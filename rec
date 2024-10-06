@@ -1,0 +1,24 @@
+#!/bin/sh
+### function ###
+# simple screen recorder that pops out the file with ripdrag
+# to drag and drop it into a gui application
+### usage ###
+# just `rec` and then q/<c-c> to quit
+### dependencies ###
+# ffmpeg
+# ripdrag
+
+ffmpeg \
+  -video_size 1680x1050 \
+  -framerate 60 \
+  -f x11grab \
+  -i :0.0 \
+  -c:v libx264 \
+  -crf 1 \
+  -preset ultrafast \
+  -pix_fmt yuv420p \
+  -profile baseline \
+  -y \
+  ~/screen-recording.mp4
+
+ripdrag -x ~/screen-recording.mp4
